@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
 <title>Ledger — Money Tracker</title>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <style>
   :root{
     --paper:#EFEEE7; --paper-raised:#F7F6F1; --ink:#20281F; --ink-soft:#5B6459; --line:#C8C3B4;
@@ -56,12 +59,21 @@
   .hbar-list{max-height:340px;overflow-y:auto;padding-right:2px;}
   .hbar-row{margin-bottom:12px;}
   .hbar-top{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px;}
+  .hbar-top-left{display:flex;align-items:center;min-width:0;}
   .hbar-top .cat{font-weight:600;}
   .hbar-top .cat .over{color:var(--expense);font-family:var(--mono);font-size:10px;margin-left:6px;}
   .hbar-top .amt{font-family:var(--mono);color:var(--ink-soft);}
   .hbar-track{position:relative;height:14px;background:var(--line);border-radius:7px;overflow:hidden;}
   .hbar-fill{height:100%;border-radius:7px;}
   .hbar-budget-mark{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);}
+  .hbar-toggle{background:none;border:none;color:var(--ink-soft);font-size:11px;padding:0 4px 0 0;cursor:pointer;flex-shrink:0;}
+  .hbar-toggle-spacer{display:inline-block;width:13px;}
+  .hbar-sub-list{margin:8px 0 0 18px;padding-left:10px;border-left:2px solid var(--line);}
+  .hbar-sub-row{margin-bottom:8px;}
+  .hbar-sub-row:last-child{margin-bottom:0;}
+  .hbar-sub-top{display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px;color:var(--ink-soft);}
+  .hbar-sub-track{height:9px;background:var(--line);border-radius:5px;overflow:hidden;}
+  .hbar-sub-fill{height:100%;border-radius:5px;background:var(--accent);}
 
   /* budgets */
   .budget-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);}
@@ -108,6 +120,10 @@
   .cat-grid{display:flex;flex-wrap:wrap;gap:8px;}
   .cat-chip{padding:8px 12px;border-radius:20px;border:1.5px solid var(--line);font-size:13px;background:#fff;cursor:pointer;color:var(--ink-soft);}
   .cat-chip.selected{border-color:var(--ink);background:var(--ink);color:var(--paper);} .cat-chip.add-new{border-style:dashed;}
+  .bmonth-row{display:flex;align-items:center;justify-content:center;gap:16px;background:#fff;border:1.5px solid var(--line);border-radius:8px;padding:9px;}
+  .bmonth-row button{background:none;border:1px solid var(--ink);color:var(--ink);width:26px;height:26px;border-radius:50%;font-size:14px;cursor:pointer;}
+  .bmonth-row span{font-family:var(--mono);font-size:13px;font-weight:600;min-width:90px;text-align:center;}
+  .subcat-note{font-size:11px;color:var(--ink-soft);margin-top:-6px;margin-bottom:10px;}
   .imp-row{display:flex;gap:8px;}
   .imp-row button{flex:1;padding:9px;border-radius:8px;border:1.5px solid var(--line);background:#fff;font-size:12.5px;cursor:pointer;color:var(--ink-soft);}
   .imp-row button.selected{font-weight:600;}
@@ -126,6 +142,12 @@
   .cat-edit-row{display:flex;align-items:center;gap:8px;padding:6px 0;}
   .cat-edit-row input{flex:1;padding:8px 10px;border-radius:7px;border:1.5px solid var(--line);font-size:13px;background:#fff;color:var(--ink);}
   .cat-edit-row .cat-del{background:none;border:none;color:var(--expense);font-size:18px;cursor:pointer;padding:2px 6px;flex-shrink:0;}
+  .cat-edit-block{border-bottom:1px solid var(--line);}
+  .cat-edit-block:last-child{border-bottom:none;}
+  .cat-subs-toggle{background:none;border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:10.5px;color:var(--ink-soft);font-family:var(--mono);cursor:pointer;flex-shrink:0;white-space:nowrap;}
+  .subcat-editor{padding:0 0 10px 4px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+  .subcat-tag{display:inline-flex;align-items:center;gap:4px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:4px 4px 4px 10px;font-size:11.5px;}
+  .subcat-tag-del{background:none;border:none;color:var(--expense);font-size:13px;cursor:pointer;padding:0 4px;}
   .cat-add-row{display:flex;gap:8px;padding-top:8px;margin-top:4px;border-top:1px solid var(--line);}
   .cat-add-row input{flex:1;padding:8px 10px;border-radius:7px;border:1.5px solid var(--line);font-size:13px;background:#fff;color:var(--ink);}
   .cat-add-row button{padding:8px 14px;border-radius:7px;border:none;background:var(--ink);color:var(--paper);font-size:12.5px;cursor:pointer;}
@@ -158,7 +180,16 @@
 </script>
 
 <div id="appShell">
+<div id="householdGate" style="display:none;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;">
+  <div style="font-family:ui-monospace,monospace;font-size:20px;font-weight:700;margin-bottom:6px;">LEDGER</div>
+  <div style="font-size:13px;color:#5B6459;margin-bottom:24px;max-width:280px;line-height:1.5;">Enter your shared household code. Use the exact same code on both phones — this is what links your entries together.</div>
+  <input id="gateCodeInput" type="text" placeholder="e.g. eldin-household" autocapitalize="off" autocorrect="off"
+    style="width:100%;max-width:280px;padding:13px 14px;border-radius:8px;border:1.5px solid #C8C3B4;font-size:15px;margin-bottom:12px;">
+  <button id="gateConnectBtn" style="width:100%;max-width:280px;padding:14px;border-radius:8px;border:none;background:#20281F;color:#EFEEE7;font-size:15px;font-weight:700;cursor:pointer;">Connect</button>
+  <div id="gateStatus" style="font-size:12px;color:#5B6459;margin-top:14px;min-height:16px;"></div>
+</div>
 <div class="scroll-area">
+
 <div class="header">
   <div class="masthead">
     <div><h1>LEDGER</h1><div class="sub">income &amp; expense journal</div></div>
@@ -236,8 +267,18 @@
       <input type="number" id="fAmount" inputmode="decimal" enterkeyhint="done" placeholder="0.00" step="0.01" min="0">
       <label>Date</label>
       <input type="date" id="fDate">
+      <label>Counts toward</label>
+      <div class="bmonth-row">
+        <button id="bmonthPrev" type="button">‹</button>
+        <span id="bmonthLabel"></span>
+        <button id="bmonthNext" type="button">›</button>
+      </div>
       <label>Category</label>
       <div class="cat-grid" id="catGrid"></div>
+      <div id="subcatSection" style="display:none;">
+        <label>Subcategory (optional)</label>
+        <div class="cat-grid" id="subcatGrid"></div>
+      </div>
       <div id="impSection">
         <label>Importance</label>
         <div class="imp-row">
@@ -296,9 +337,20 @@
     try{ window.Capacitor.Plugins.StatusBar.setOverlaysWebView({ overlay: false }); }catch(e){}
   }
 
-  var STORE_KEY = "ledger_entries_v1";
+  // ---- Fill in your own Firebase project's config here (see the setup guide) ----
+  var FIREBASE_CONFIG = {
+    apiKey: "AIzaSyDux7DykvcrTHyiDSuAG-IxpX8mkXxJPKU",
+    authDomain: "ledger-household.firebaseapp.com.firebaseapp.com",
+    projectId: "ledger-household",
+    storageBucket: "ledger-household.firebasestorage.app",
+    messagingSenderId: "305458683077",
+    appId: "1:305458683077:web:d532ba2015ac37c89f64ac"
+  };
+
   var CAT_KEY = "ledger_categories_v1";
   var BUDGET_KEY = "ledger_budgets_v1";
+  var SUBCAT_KEY = "ledger_subcategories_v1";
+  var HOUSEHOLD_KEY = "ledger_household_code_v1";
   var DEFAULT_CATS = ["Food","Transport","Bills","Health","Shopping","Entertainment","Education","Family","Savings","Other"];
 
   function storageGet(key, fallback){
@@ -312,20 +364,33 @@
     } catch(e){ return false; }
   }
 
-  var storedEntries = JSON.parse(storageGet(STORE_KEY, "[]"));
-  storedEntries.forEach(function(e){
+  function migrateEntry(e){
     if(e.importance==="essential") e.importance = "high";
     else if(e.importance==="discretionary") e.importance = "low";
-  });
+    // Older entries only had a date; give them an explicit budget month/year
+    // (defaulting to the date's own month) so everything can filter on
+    // budgetYear/budgetMonth uniformly going forward.
+    if(e.budgetMonth === undefined || e.budgetYear === undefined){
+      var d = new Date(e.date+"T00:00:00");
+      e.budgetMonth = d.getMonth();
+      e.budgetYear = d.getFullYear();
+    }
+    if(e.subcategory === undefined) e.subcategory = null;
+    return e;
+  }
 
   var state = {
-    entries: storedEntries,
+    entries: [], // populated live from Firestore once connected
     categories: JSON.parse(storageGet(CAT_KEY, "null") || "null") || DEFAULT_CATS.slice(),
     budgets: JSON.parse(storageGet(BUDGET_KEY, "null") || "null") || {},
+    subcategories: JSON.parse(storageGet(SUBCAT_KEY, "null") || "null") || {},
     viewMonth: new Date().getMonth(),
     viewYear: new Date().getFullYear(),
     formType: "expense",
     formCat: null,
+    formSubcat: null,
+    formBudgetMonth: new Date().getMonth(),
+    formBudgetYear: new Date().getFullYear(),
     formImportance: "high",
     entryFilter: "all",
     activeTab: "overview",
@@ -343,11 +408,111 @@
     var b = document.getElementById("errBanner");
     if(b.dataset.kind === "storage"){ b.style.display = "none"; b.textContent = ""; }
   }
-  function save(){
-    var okE = storageSet(STORE_KEY, JSON.stringify(state.entries));
+  // ---- Firestore sync ----
+  var houseRef = null, entriesRef = null, syncReady = false;
+
+  function saveConfig(){
+    // Local cache first (instant, works offline even before Firestore connects)
     var okC = storageSet(CAT_KEY, JSON.stringify(state.categories));
     var okB = storageSet(BUDGET_KEY, JSON.stringify(state.budgets));
-    if(!okE || !okC || !okB){ showStorageBanner(); } else { hideStorageBanner(); }
+    var okS = storageSet(SUBCAT_KEY, JSON.stringify(state.subcategories));
+    if(!okC || !okB || !okS){ showStorageBanner(); } else { hideStorageBanner(); }
+    // Then push to the shared household document, if connected
+    if(houseRef){
+      houseRef.set({
+        categories: state.categories,
+        budgets: state.budgets,
+        subcategories: state.subcategories
+      }, { merge: true }).catch(function(err){ showSyncError(err.message); });
+    }
+  }
+
+  function showSyncError(msg){
+    var b = document.getElementById("errBanner");
+    b.dataset.kind = "sync";
+    b.style.display = "block";
+    b.style.background = "#A8391F";
+    b.textContent = "Sync error: " + msg;
+  }
+  function clearSyncError(){
+    var b = document.getElementById("errBanner");
+    if(b.dataset.kind === "sync"){ b.style.display = "none"; b.textContent = ""; }
+  }
+
+  function showGate(){
+    document.getElementById("householdGate").style.display = "flex";
+    document.querySelector(".scroll-area").style.display = "none";
+    document.getElementById("tabbar").style.display = "none";
+    document.getElementById("openAdd").style.display = "none";
+  }
+  function hideGate(){
+    document.getElementById("householdGate").style.display = "none";
+    document.querySelector(".scroll-area").style.display = "block";
+    document.getElementById("tabbar").style.display = "flex";
+    document.getElementById("openAdd").style.display = "flex";
+  }
+
+  function connectHousehold(code){
+    document.getElementById("gateStatus").textContent = "Connecting…";
+    try{
+      if(!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    } catch(e){
+      document.getElementById("gateStatus").textContent = "Couldn't start sync (" + e.message + ").";
+      return;
+    }
+    var db = firebase.firestore();
+    try{ db.enablePersistence({ synchronizeTabs: true }).catch(function(){}); }catch(e){}
+
+    firebase.auth().signInAnonymously().catch(function(err){
+      document.getElementById("gateStatus").textContent = "Couldn't connect (" + err.message + ").";
+    });
+
+    firebase.auth().onAuthStateChanged(function(user){
+      if(!user) return;
+      houseRef = db.collection("households").doc(code);
+      entriesRef = houseRef.collection("entries");
+
+      houseRef.onSnapshot(function(doc){
+        clearSyncError();
+        var data = doc.data() || {};
+        state.categories = (data.categories && data.categories.length) ? data.categories : DEFAULT_CATS.slice();
+        state.budgets = data.budgets || {};
+        state.subcategories = data.subcategories || {};
+        storageSet(CAT_KEY, JSON.stringify(state.categories));
+        storageSet(BUDGET_KEY, JSON.stringify(state.budgets));
+        storageSet(SUBCAT_KEY, JSON.stringify(state.subcategories));
+        if(syncReady) render();
+      }, function(err){ showSyncError(err.message); });
+
+      entriesRef.onSnapshot(function(snap){
+        clearSyncError();
+        state.entries = snap.docs.map(function(d){
+          var e = d.data();
+          e.id = d.id;
+          return migrateEntry(e);
+        });
+        syncReady = true;
+        hideGate();
+        render();
+      }, function(err){ showSyncError(err.message); });
+    });
+  }
+
+  document.getElementById("gateConnectBtn").addEventListener("click", function(){
+    var code = document.getElementById("gateCodeInput").value.trim();
+    if(!code){ document.getElementById("gateStatus").textContent = "Enter a household code first."; return; }
+    storageSet(HOUSEHOLD_KEY, code);
+    connectHousehold(code);
+  });
+  document.getElementById("gateCodeInput").addEventListener("keydown", function(ev){
+    if(ev.key === "Enter"){ ev.preventDefault(); document.getElementById("gateConnectBtn").click(); }
+  });
+
+  var cachedCode = storageGet(HOUSEHOLD_KEY, null);
+  if(cachedCode){
+    connectHousehold(cachedCode);
+  } else {
+    showGate();
   }
 
   function fmt(n){
@@ -360,8 +525,7 @@
 
   function entriesForMonth(y,m){
     return state.entries.filter(function(e){
-      var d = new Date(e.date+"T00:00:00");
-      return d.getMonth()===m && d.getFullYear()===y;
+      return e.budgetMonth===m && e.budgetYear===y;
     });
   }
   function monthTotals(y,m){
@@ -385,6 +549,7 @@
   }
 
   var PALETTE = ["#2D6A4F","#A8391F","#8A6D3B","#4A6FA5","#7A5195","#B08B3F","#556B2F","#C05780","#3F7D7D","#8C5E3C"];
+  var expandedCategories = {}; // which category bars are drilled open — UI-only, not persisted
 
   function render(){
     document.getElementById("monthLabel").textContent =
@@ -433,7 +598,14 @@
 
     // category horizontal bar chart
     var byCat = {};
-    list.forEach(function(e){ if(e.type!=="expense") return; byCat[e.category] = (byCat[e.category]||0) + e.amount; });
+    var byCatSub = {};
+    list.forEach(function(e){
+      if(e.type!=="expense") return;
+      byCat[e.category] = (byCat[e.category]||0) + e.amount;
+      var sub = e.subcategory || "(untagged)";
+      if(!byCatSub[e.category]) byCatSub[e.category] = {};
+      byCatSub[e.category][sub] = (byCatSub[e.category][sub]||0) + e.amount;
+    });
     var catEntries = Object.keys(byCat).map(function(k){return {cat:k, amt:byCat[k]};}).sort(function(a,b){return b.amt-a.amt;});
     var chartCard = document.getElementById("chartCard");
     if(catEntries.length===0){
@@ -446,10 +618,29 @@
         var over = budget && c.amt > budget;
         var budgetMark = budget ? '<div class="hbar-budget-mark" style="left:' + Math.min(100, budget/maxAmt*100) + '%"></div>' : '';
         var color = over ? "var(--expense)" : PALETTE[i%PALETTE.length];
+
+        var subMap = byCatSub[c.cat] || {};
+        var subKeys = Object.keys(subMap).filter(function(k){ return k !== "(untagged)"; });
+        var hasSub = subKeys.length > 0;
+        var expanded = !!expandedCategories[c.cat];
+        var toggle = hasSub ? '<button class="hbar-toggle" data-cat="' + c.cat + '">' + (expanded?"▾":"▸") + '</button>' : '<span class="hbar-toggle-spacer"></span>';
+        var subHtml = "";
+        if(hasSub && expanded){
+          var subList = Object.keys(subMap).map(function(k){return {name:k, amt:subMap[k]};}).sort(function(a,b){return b.amt-a.amt;});
+          var subMax = subList[0].amt;
+          subHtml = '<div class="hbar-sub-list">' + subList.map(function(s){
+            var spct = s.amt/subMax*100;
+            var label = s.name === "(untagged)" ? "Other / untagged" : s.name;
+            return '<div class="hbar-sub-row"><div class="hbar-sub-top"><span>' + label + '</span><span>' + fmt(s.amt) + '</span></div>' +
+              '<div class="hbar-sub-track"><div class="hbar-sub-fill" style="width:' + spct + '%"></div></div></div>';
+          }).join('') + '</div>';
+        }
+
         return '<div class="hbar-row">' +
-          '<div class="hbar-top"><span class="cat">' + c.cat + (over ? '<span class="over">over budget</span>' : '') + '</span>' +
+          '<div class="hbar-top"><span class="hbar-top-left">' + toggle + '<span class="cat">' + c.cat + (over ? '<span class="over">over budget</span>' : '') + '</span></span>' +
           '<span class="amt">' + fmt(c.amt) + (budget ? ' / ' + fmt(budget) : '') + '</span></div>' +
           '<div class="hbar-track"><div class="hbar-fill" style="width:' + pct + '%;background:' + color + '"></div>' + budgetMark + '</div>' +
+          subHtml +
           '</div>';
       }).join('') + '</div>';
       chartCard.innerHTML = rows;
@@ -506,9 +697,15 @@
         var markClass = e.type==="income" ? "income-mark" : ("imp-" + (e.importance || "high"));
         var d = new Date(e.date+"T00:00:00");
         var dateStr = d.toLocaleDateString(undefined,{month:"short",day:"numeric"});
+        var catLabel = e.category + (e.subcategory ? " · " + e.subcategory : "");
+        var shiftedNote = "";
+        if(e.budgetMonth !== d.getMonth() || e.budgetYear !== d.getFullYear()){
+          var bLabel = new Date(e.budgetYear, e.budgetMonth, 1).toLocaleDateString(undefined,{month:"short"});
+          shiftedNote = " · counted in " + bLabel;
+        }
         return '<div class="entry"><span class="mark ' + markClass + '"></span>' +
-          '<div class="entry-main"><div class="entry-cat">' + e.category + '</div>' +
-          '<div class="entry-note">' + (e.note ? e.note + " · " : "") + '<span class="entry-date">' + dateStr + '</span></div></div>' +
+          '<div class="entry-main"><div class="entry-cat">' + catLabel + '</div>' +
+          '<div class="entry-note">' + (e.note ? e.note + " · " : "") + '<span class="entry-date">' + dateStr + '</span>' + shiftedNote + '</div></div>' +
           '<span class="entry-amt ' + e.type + '">' + (e.type==="income"?"+":"-") + fmt(e.amount) + '</span>' +
           '<button class="entry-del" data-id="' + e.id + '">×</button></div>';
       }).join('');
@@ -569,6 +766,14 @@
     b.addEventListener("click", function(){ setTab(b.getAttribute("data-tab")); });
   });
 
+  document.getElementById("chartCard").addEventListener("click", function(ev){
+    var btn = ev.target.closest(".hbar-toggle");
+    if(!btn) return;
+    var cat = btn.getAttribute("data-cat");
+    expandedCategories[cat] = !expandedCategories[cat];
+    render();
+  });
+
   document.getElementById("entryFilter").addEventListener("click", function(ev){
     var btn = ev.target.closest("button[data-f]");
     if(!btn) return;
@@ -583,7 +788,7 @@
     var cat = input.getAttribute("data-cat");
     var v = parseFloat(input.value);
     if(!v || v<=0) delete state.budgets[cat]; else state.budgets[cat] = v;
-    save();
+    saveConfig();
     render();
   });
 
@@ -595,8 +800,13 @@
     var today = new Date();
     var day = Math.min(today.getDate(), daysInMonth(state.viewYear, state.viewMonth));
     document.getElementById("fDate").value = toDateStr(state.viewYear, state.viewMonth, day);
+    state.formBudgetMonth = state.viewMonth;
+    state.formBudgetYear = state.viewYear;
+    renderBudgetMonthLabel();
     setType("expense");
+    state.formSubcat = null;
     renderCatGrid();
+    renderSubcatGrid();
     setImportance("high");
     document.getElementById("fAmount").value = "";
     document.getElementById("fNote").value = "";
@@ -605,6 +815,19 @@
   function closeSheet(){ setTab(state.previousTab || "overview"); }
   document.getElementById("openAdd").addEventListener("click", openSheet);
   document.getElementById("cancelSheet").addEventListener("click", closeSheet);
+
+  function renderBudgetMonthLabel(){
+    document.getElementById("bmonthLabel").textContent =
+      new Date(state.formBudgetYear, state.formBudgetMonth, 1).toLocaleDateString(undefined,{month:"short",year:"numeric"});
+  }
+  document.getElementById("bmonthPrev").addEventListener("click", function(){
+    state.formBudgetMonth--; if(state.formBudgetMonth<0){ state.formBudgetMonth=11; state.formBudgetYear--; }
+    renderBudgetMonthLabel();
+  });
+  document.getElementById("bmonthNext").addEventListener("click", function(){
+    state.formBudgetMonth++; if(state.formBudgetMonth>11){ state.formBudgetMonth=0; state.formBudgetYear++; }
+    renderBudgetMonthLabel();
+  });
 
   function setType(t){
     state.formType = t;
@@ -634,7 +857,12 @@
     }).join("") + '<div class="cat-chip add-new" id="addCatChip">+ new</div>' +
       (showQuickAddCat ? '<div class="quick-add-row"><input type="text" id="quickCatInput" placeholder="Category name" enterkeyhint="done"><button id="quickCatAdd">Add</button></div>' : '');
     Array.prototype.forEach.call(grid.querySelectorAll(".cat-chip[data-cat]"), function(el){
-      el.addEventListener("click", function(){ state.formCat = el.getAttribute("data-cat"); renderCatGrid(); });
+      el.addEventListener("click", function(){
+        state.formCat = el.getAttribute("data-cat");
+        state.formSubcat = null;
+        renderCatGrid();
+        renderSubcatGrid();
+      });
     });
     document.getElementById("addCatChip").addEventListener("click", function(){
       showQuickAddCat = true;
@@ -649,14 +877,72 @@
         if(name){
           if(state.categories.indexOf(name)===-1) state.categories.push(name);
           state.formCat = name;
-          save();
+          state.formSubcat = null;
+          saveConfig();
         }
         showQuickAddCat = false;
         renderCatGrid();
+        renderSubcatGrid();
       }
       document.getElementById("quickCatAdd").addEventListener("click", confirmQuickAdd);
       document.getElementById("quickCatInput").addEventListener("keydown", function(ev){
         if(ev.key === "Enter"){ ev.preventDefault(); confirmQuickAdd(); }
+      });
+    }
+  }
+
+  var showQuickAddSubcat = false;
+  function renderSubcatGrid(){
+    var section = document.getElementById("subcatSection");
+    var grid = document.getElementById("subcatGrid");
+    var subs = state.subcategories[state.formCat] || [];
+    section.style.display = "block";
+    if(subs.length === 0 && !showQuickAddSubcat){
+      // No subcategories exist for this category yet — show a light,
+      // unobtrusive link rather than a full picker, since most categories
+      // won't need this level of detail.
+      grid.innerHTML = '<div class="cat-chip add-new" id="addSubcatChip">+ add subcategory</div>';
+      document.getElementById("addSubcatChip").addEventListener("click", function(){
+        showQuickAddSubcat = true;
+        renderSubcatGrid();
+        var input = document.getElementById("quickSubcatInput");
+        if(input) input.focus();
+      });
+      return;
+    }
+    grid.innerHTML = subs.map(function(s){
+      return '<div class="cat-chip ' + (s===state.formSubcat?"selected":"") + '" data-sub="' + s + '">' + s + '</div>';
+    }).join("") + '<div class="cat-chip add-new" id="addSubcatChip">+ new</div>' +
+      (showQuickAddSubcat ? '<div class="quick-add-row"><input type="text" id="quickSubcatInput" placeholder="Subcategory name" enterkeyhint="done"><button id="quickSubcatAdd">Add</button></div>' : '');
+    Array.prototype.forEach.call(grid.querySelectorAll(".cat-chip[data-sub]"), function(el){
+      el.addEventListener("click", function(){
+        var val = el.getAttribute("data-sub");
+        state.formSubcat = state.formSubcat===val ? null : val; // tap again to deselect
+        renderSubcatGrid();
+      });
+    });
+    document.getElementById("addSubcatChip").addEventListener("click", function(){
+      showQuickAddSubcat = true;
+      renderSubcatGrid();
+      var input = document.getElementById("quickSubcatInput");
+      if(input) input.focus();
+    });
+    if(showQuickAddSubcat){
+      function confirmQuickAddSub(){
+        var input = document.getElementById("quickSubcatInput");
+        var name = input.value.trim();
+        if(name){
+          if(!state.subcategories[state.formCat]) state.subcategories[state.formCat] = [];
+          if(state.subcategories[state.formCat].indexOf(name)===-1) state.subcategories[state.formCat].push(name);
+          state.formSubcat = name;
+          saveConfig();
+        }
+        showQuickAddSubcat = false;
+        renderSubcatGrid();
+      }
+      document.getElementById("quickSubcatAdd").addEventListener("click", confirmQuickAddSub);
+      document.getElementById("quickSubcatInput").addEventListener("keydown", function(ev){
+        if(ev.key === "Enter"){ ev.preventDefault(); confirmQuickAddSub(); }
       });
     }
   }
@@ -667,17 +953,19 @@
     var note = document.getElementById("fNote").value.trim();
     if(!amount || amount<=0){ alert("Enter a valid amount."); return; }
     if(!date){ alert("Pick a date."); return; }
-    state.entries.push({
-      id: Date.now(), type: state.formType, amount: amount,
+    if(!entriesRef){ alert("Not connected yet — check your household code."); return; }
+    entriesRef.add({
+      type: state.formType, amount: amount,
       category: state.formType==="income" ? "Income" : (state.formCat || "Other"),
+      subcategory: state.formType==="expense" ? state.formSubcat : null,
       importance: state.formType==="expense" ? state.formImportance : null,
-      note: note, date: date
-    });
-    save();
-    var d = new Date(date+"T00:00:00");
-    state.viewMonth = d.getMonth();
-    state.viewYear = d.getFullYear();
-    render();
+      note: note, date: date,
+      budgetMonth: state.formBudgetMonth, budgetYear: state.formBudgetYear
+    }).catch(function(err){ showSyncError(err.message); });
+    // The entries listener will pick this up (instantly, via Firestore's
+    // local cache, even before the server confirms it) and re-render.
+    state.viewMonth = state.formBudgetMonth;
+    state.viewYear = state.formBudgetYear;
     setTab("entries");
   }
   document.getElementById("saveEntry").addEventListener("click", submitEntry);
@@ -690,10 +978,9 @@
   document.getElementById("entryList").addEventListener("click", function(ev){
     var btn = ev.target.closest(".entry-del");
     if(!btn) return;
-    var id = Number(btn.getAttribute("data-id"));
+    var id = btn.getAttribute("data-id");
     if(confirm("Delete this entry?")){
-      state.entries = state.entries.filter(function(e){ return e.id!==id; });
-      save(); render();
+      if(entriesRef) entriesRef.doc(id).delete().catch(function(err){ showSyncError(err.message); });
     }
   });
 
@@ -704,11 +991,26 @@
     state.viewMonth++; if(state.viewMonth>11){ state.viewMonth=0; state.viewYear++; } render();
   });
 
+  var expandedCatSubEditor = {};
   function renderCatEditor(){
     var el = document.getElementById("catEditor");
     el.innerHTML = state.categories.map(function(c, i){
-      return '<div class="cat-edit-row"><input type="text" value="' + c.replace(/"/g,"&quot;") + '" data-idx="' + i + '">' +
-        '<button class="cat-del" data-idx="' + i + '">×</button></div>';
+      var subs = state.subcategories[c] || [];
+      var open = !!expandedCatSubEditor[c];
+      var subsHtml = "";
+      if(open){
+        subsHtml = '<div class="subcat-editor">' +
+          subs.map(function(s, si){
+            return '<span class="subcat-tag">' + s + '<button class="subcat-tag-del" data-cat="' + c + '" data-si="' + si + '">×</button></span>';
+          }).join("") +
+          '<div class="cat-add-row"><input type="text" class="newSubInput" data-cat="' + c + '" placeholder="New subcategory" enterkeyhint="done"><button class="addSubBtn" data-cat="' + c + '">Add</button></div>' +
+          '</div>';
+      }
+      return '<div class="cat-edit-block">' +
+        '<div class="cat-edit-row"><input type="text" value="' + c.replace(/"/g,"&quot;") + '" data-idx="' + i + '">' +
+        '<button class="cat-subs-toggle" data-cat="' + c + '">' + (subs.length ? subs.length + " sub" + (subs.length===1?"":"s") : "+ subs") + '</button>' +
+        '<button class="cat-del" data-idx="' + i + '">×</button></div>' +
+        subsHtml + '</div>';
     }).join("") +
       '<div class="cat-add-row"><input type="text" id="newCatInput" placeholder="New category name" enterkeyhint="done"><button id="addCatBtn">Add</button></div>';
   }
@@ -716,17 +1018,33 @@
     var input = ev.target.closest("input[data-idx]");
     if(!input) return;
     var idx = Number(input.getAttribute("data-idx"));
+    var oldName = state.categories[idx];
     var name = input.value.trim();
-    if(name) state.categories[idx] = name; else input.value = state.categories[idx];
-    save(); renderCatEditor(); render();
+    if(name && name !== oldName){
+      state.categories[idx] = name;
+      if(state.subcategories[oldName]){
+        state.subcategories[name] = state.subcategories[oldName];
+        delete state.subcategories[oldName];
+      }
+      if(state.budgets[oldName] !== undefined){
+        state.budgets[name] = state.budgets[oldName];
+        delete state.budgets[oldName];
+      }
+    } else if(!name){
+      input.value = oldName;
+    }
+    saveConfig(); renderCatEditor(); render();
   });
   document.getElementById("catEditor").addEventListener("click", function(ev){
     var del = ev.target.closest(".cat-del");
     if(del){
       if(state.categories.length <= 1){ alert("You need at least one category."); return; }
       var idx = Number(del.getAttribute("data-idx"));
+      var name = state.categories[idx];
       state.categories.splice(idx, 1);
-      save(); renderCatEditor(); render();
+      delete state.subcategories[name];
+      delete state.budgets[name];
+      saveConfig(); renderCatEditor(); render();
       return;
     }
     if(ev.target.id === "addCatBtn"){
@@ -734,14 +1052,51 @@
       var name = input.value.trim();
       if(name && state.categories.indexOf(name)===-1){
         state.categories.push(name);
-        save(); renderCatEditor(); render();
+        saveConfig(); renderCatEditor(); render();
+      }
+      return;
+    }
+    var subsToggle = ev.target.closest(".cat-subs-toggle");
+    if(subsToggle){
+      var cat = subsToggle.getAttribute("data-cat");
+      expandedCatSubEditor[cat] = !expandedCatSubEditor[cat];
+      renderCatEditor();
+      return;
+    }
+    var subDel = ev.target.closest(".subcat-tag-del");
+    if(subDel){
+      var cat2 = subDel.getAttribute("data-cat");
+      var si = Number(subDel.getAttribute("data-si"));
+      state.subcategories[cat2].splice(si, 1);
+      if(state.subcategories[cat2].length === 0) delete state.subcategories[cat2];
+      saveConfig(); renderCatEditor(); render();
+      return;
+    }
+    var addSubBtn = ev.target.closest(".addSubBtn");
+    if(addSubBtn){
+      var cat3 = addSubBtn.getAttribute("data-cat");
+      var input3 = el_newSubInput(cat3);
+      var name3 = input3.value.trim();
+      if(name3){
+        if(!state.subcategories[cat3]) state.subcategories[cat3] = [];
+        if(state.subcategories[cat3].indexOf(name3)===-1) state.subcategories[cat3].push(name3);
+        saveConfig(); renderCatEditor(); render();
       }
     }
   });
+  function el_newSubInput(cat){
+    return document.querySelector('.newSubInput[data-cat="' + cssEscape(cat) + '"]');
+  }
+  function cssEscape(s){ return String(s).replace(/["\\]/g, "\\$&"); }
   document.getElementById("catEditor").addEventListener("keydown", function(ev){
-    if(ev.key === "Enter" && ev.target.id === "newCatInput"){
+    if(ev.key !== "Enter") return;
+    if(ev.target.id === "newCatInput"){
       ev.preventDefault();
       document.getElementById("addCatBtn").click();
+    } else if(ev.target.classList.contains("newSubInput")){
+      ev.preventDefault();
+      var cat = ev.target.getAttribute("data-cat");
+      document.querySelector('.addSubBtn[data-cat="' + cssEscape(cat) + '"]').click();
     }
   });
 
@@ -807,9 +1162,9 @@
   }
   document.getElementById("exportCsvBtn").addEventListener("click", function(){
     var list = entriesForMonth(state.viewYear, state.viewMonth).slice().sort(function(a,b){ return a.date.localeCompare(b.date); });
-    var rows = [["Date","Type","Category","Importance","Amount","Note"]];
+    var rows = [["Date","Type","Category","Subcategory","Importance","Amount","Note"]];
     list.forEach(function(e){
-      rows.push([e.date, e.type, e.category, e.importance||"", e.amount.toFixed(2), e.note||""]);
+      rows.push([e.date, e.type, e.category, e.subcategory||"", e.importance||"", e.amount.toFixed(2), e.note||""]);
     });
     var csv = rows.map(function(r){ return r.map(csvEscape).join(","); }).join("\r\n");
     var monthLabel = new Date(state.viewYear, state.viewMonth, 1).toLocaleDateString(undefined,{month:"short",year:"numeric"});
@@ -821,7 +1176,8 @@
     var monthLabel = new Date(state.viewYear, state.viewMonth, 1).toLocaleDateString(undefined,{month:"long",year:"numeric"});
     var list = t.list.slice().sort(function(a,b){ return a.date.localeCompare(b.date); });
     var rowsHtml = list.map(function(e){
-      return "<tr><td>" + e.date + "</td><td>" + e.type + "</td><td>" + e.category + "</td><td>" +
+      var cat = e.category + (e.subcategory ? " · " + e.subcategory : "");
+      return "<tr><td>" + e.date + "</td><td>" + e.type + "</td><td>" + cat + "</td><td>" +
         (e.type==="income"?"+":"-") + fmt(e.amount) + "</td><td>" + (e.note||"") + "</td></tr>";
     }).join("");
     var body =
@@ -850,7 +1206,9 @@
     }
   });
 
-  render();
+  // Initial render happens once Firestore's entries listener fires (see
+  // connectHousehold above) — rendering before that would show a false
+  // "no entries" state while the real data is still loading.
 })();
 </script>
 </body>
