@@ -68,12 +68,19 @@
   .hbar-budget-mark{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);}
   .hbar-toggle{background:none;border:none;color:var(--ink-soft);font-size:11px;padding:0 4px 0 0;cursor:pointer;flex-shrink:0;}
   .hbar-toggle-spacer{display:inline-block;width:13px;}
+  .hbar-checkbox{margin-right:7px;width:16px;height:16px;flex-shrink:0;accent-color:var(--ink);}
+  .hbar-navlabel{background:none;border:none;padding:0;margin:0;font:inherit;color:inherit;font-weight:inherit;cursor:pointer;text-align:left;}
   .hbar-sub-list{margin:8px 0 0 18px;padding-left:10px;border-left:2px solid var(--line);}
   .hbar-sub-row{margin-bottom:8px;}
   .hbar-sub-row:last-child{margin-bottom:0;}
-  .hbar-sub-top{display:flex;justify-content:space-between;font-size:11.5px;margin-bottom:3px;color:var(--ink-soft);}
+  .hbar-sub-top{display:flex;justify-content:space-between;align-items:center;font-size:11.5px;margin-bottom:3px;color:var(--ink-soft);}
+  .hbar-sub-left{display:flex;align-items:center;min-width:0;}
+  .hbar-sub-amt{font-family:var(--mono);color:var(--ink-soft);flex-shrink:0;}
   .hbar-sub-track{height:9px;background:var(--line);border-radius:5px;overflow:hidden;}
   .hbar-sub-fill{height:100%;border-radius:5px;background:var(--accent);}
+  #selectSummary{background:#fff;border:1px solid var(--line);border-left:3px solid var(--income);border-radius:6px;padding:12px 14px;margin-bottom:12px;font-size:12.5px;line-height:1.5;color:var(--ink-soft);}
+  #selectSummary .ss-total{font-family:var(--mono);font-size:19px;font-weight:700;color:var(--income);}
+  #selectSummary .ss-clear{background:none;border:1px solid var(--line);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--ink-soft);cursor:pointer;font-family:var(--mono);margin-top:8px;}
 
   /* budgets */
   .budget-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);}
@@ -92,7 +99,17 @@
   .entry-filter{display:flex;gap:8px;margin-bottom:10px;}
   .entry-filter button{flex:1;padding:7px;border-radius:7px;border:1px solid var(--line);background:#fff;font-size:11.5px;color:var(--ink-soft);cursor:pointer;font-family:var(--mono);}
   .entry-filter button.active{background:var(--ink);color:var(--paper);border-color:var(--ink);}
-  .entry{display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid var(--line);}
+  #filterSummary{display:none;}
+  #filterSummary.active{
+    display:flex;justify-content:space-between;align-items:center;
+    background:#fff;border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:6px;padding:9px 12px;margin:10px 0;font-size:12.5px;
+  }
+  #filterSummary .fs-total{font-family:var(--mono);font-weight:700;color:var(--accent);}
+  #filterSummary button{background:none;border:none;color:var(--ink-soft);font-size:11px;font-family:var(--mono);cursor:pointer;text-decoration:underline;}
+  .entry{display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid var(--line);cursor:pointer;}
+  .entry:active{background:var(--paper);}
+  .entry:active{background:var(--paper);}
   .entry:last-child{border-bottom:none;}
   .entry .mark{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
   .entry .mark.imp-high{background:var(--imp-high);} .entry .mark.imp-medium{background:var(--imp-medium);}
@@ -218,7 +235,11 @@
 
   <div class="tab-panel" id="tab-categories">
     <div class="card">
-      <p class="panel-title">Where it went — by category</p>
+      <div class="panel-toggle-row">
+        <p class="panel-title" style="margin:0;">Where it went — by category</p>
+        <button id="toggleSelectMode" class="toggle-link">Select</button>
+      </div>
+      <div id="selectSummary" style="display:none;"></div>
       <div id="chartCard"></div>
     </div>
     <div class="card">
@@ -252,13 +273,22 @@
         <button data-f="income">Income</button>
         <button data-f="expense">Expense</button>
       </div>
+      <div class="panel-toggle-row" style="margin-top:8px;">
+        <span style="font-size:11px;color:var(--ink-soft);font-family:var(--mono);">Tap an entry to edit it</span>
+        <button id="toggleEntryCatFilter" class="toggle-link">Filter ▾</button>
+      </div>
+      <div id="entryCatFilterPanel" class="collapsible">
+        <div class="cat-grid" id="entryCatFilterGrid"></div>
+        <div class="cat-grid" id="entrySubFilterGrid" style="margin-top:8px;"></div>
+      </div>
+      <div id="filterSummary"></div>
       <div id="entryList"></div>
     </div>
   </div>
 
   <div class="tab-panel" id="tab-add">
     <div class="card">
-      <p class="panel-title">New entry</p>
+      <p class="panel-title" id="addPanelTitle">New entry</p>
       <div class="toggle-row">
         <button id="typeIncome">Income</button>
         <button id="typeExpense">Expense</button>
@@ -338,7 +368,7 @@
   }
 
   // ---- Fill in your own Firebase project's config here (see the setup guide) ----
-  var FIREBASE_CONFIG = {
+ var FIREBASE_CONFIG = {
     apiKey: "AIzaSyDux7DykvcrTHyiDSuAG-IxpX8mkXxJPKU",
     authDomain: "ledger-household.firebaseapp.com.firebaseapp.com",
     projectId: "ledger-household",
@@ -391,8 +421,13 @@
     formSubcat: null,
     formBudgetMonth: new Date().getMonth(),
     formBudgetYear: new Date().getFullYear(),
+    editingEntryId: null,
+    catFilterKeys: null,
     formImportance: "high",
     entryFilter: "all",
+    categoryFilter: [],
+    subcategoryFilter: [],
+    editingEntryId: null,
     activeTab: "overview",
     previousTab: "overview"
   };
@@ -550,6 +585,26 @@
 
   var PALETTE = ["#2D6A4F","#A8391F","#8A6D3B","#4A6FA5","#7A5195","#B08B3F","#556B2F","#C05780","#3F7D7D","#8C5E3C"];
   var expandedCategories = {}; // which category bars are drilled open — UI-only, not persisted
+  var selectMode = false;
+  var selectedKeys = new Set(); // "Category" or "Category::Subcategory" (or "Category::__untagged__")
+
+  function entryMatchesKey(e, key){
+    if(key.indexOf("::")===-1) return e.category === key;
+    var parts = key.split("::");
+    var cat = parts[0], sub = parts[1];
+    if(sub === "__untagged__") return e.category===cat && !e.subcategory;
+    return e.category===cat && e.subcategory===sub;
+  }
+  function isEntryCovered(e, keys){
+    var arr = Array.isArray(keys) ? keys : Array.from(keys);
+    for(var i=0;i<arr.length;i++){ if(entryMatchesKey(e, arr[i])) return true; }
+    return false;
+  }
+  function keyLabel(key){
+    if(key.indexOf("::")===-1) return key;
+    var parts = key.split("::");
+    return parts[0] + " · " + (parts[1]==="__untagged__" ? "untagged" : parts[1]);
+  }
 
   function render(){
     document.getElementById("monthLabel").textContent =
@@ -624,20 +679,37 @@
         var hasSub = subKeys.length > 0;
         var expanded = !!expandedCategories[c.cat];
         var toggle = hasSub ? '<button class="hbar-toggle" data-cat="' + c.cat + '">' + (expanded?"▾":"▸") + '</button>' : '<span class="hbar-toggle-spacer"></span>';
+        var catKey = c.cat;
+        var catChecked = selectedKeys.has(catKey);
+        var checkbox = selectMode ? '<input type="checkbox" class="hbar-checkbox" data-key="' + catKey + '"' + (catChecked?' checked':'') + '>' : '';
+        var catLabelTag = selectMode ? 'span' : 'button';
+        var catLabelAttrs = selectMode ? '' : ' class="hbar-navlabel" data-navkey="' + catKey + '"';
+
         var subHtml = "";
         if(hasSub && expanded){
           var subList = Object.keys(subMap).map(function(k){return {name:k, amt:subMap[k]};}).sort(function(a,b){return b.amt-a.amt;});
           var subMax = subList[0].amt;
           subHtml = '<div class="hbar-sub-list">' + subList.map(function(s){
             var spct = s.amt/subMax*100;
+            var subKeyRaw = s.name === "(untagged)" ? "__untagged__" : s.name;
+            var subKey = c.cat + "::" + subKeyRaw;
+            var subChecked = selectedKeys.has(subKey);
+            var subCheckbox = selectMode ? '<input type="checkbox" class="hbar-checkbox" data-key="' + subKey + '">' : '';
             var label = s.name === "(untagged)" ? "Other / untagged" : s.name;
-            return '<div class="hbar-sub-row"><div class="hbar-sub-top"><span>' + label + '</span><span>' + fmt(s.amt) + '</span></div>' +
+            var labelHtml = selectMode
+              ? '<span>' + label + '</span>'
+              : '<button class="hbar-navlabel" data-navkey="' + subKey + '">' + label + '</button>';
+            return '<div class="hbar-sub-row"><div class="hbar-sub-top"><span class="hbar-sub-left">' +
+              (selectMode ? '<input type="checkbox" class="hbar-checkbox" data-key="' + subKey + '"' + (subChecked?' checked':'') + '>' : '') +
+              labelHtml + '</span><span class="hbar-sub-amt">' + fmt(s.amt) + '</span></div>' +
               '<div class="hbar-sub-track"><div class="hbar-sub-fill" style="width:' + spct + '%"></div></div></div>';
           }).join('') + '</div>';
         }
 
         return '<div class="hbar-row">' +
-          '<div class="hbar-top"><span class="hbar-top-left">' + toggle + '<span class="cat">' + c.cat + (over ? '<span class="over">over budget</span>' : '') + '</span></span>' +
+          '<div class="hbar-top"><span class="hbar-top-left">' + toggle + checkbox +
+          '<' + catLabelTag + catLabelAttrs + '>' + c.cat + (over ? '<span class="over">over budget</span>' : '') + '</' + catLabelTag + '>' +
+          '</span>' +
           '<span class="amt">' + fmt(c.amt) + (budget ? ' / ' + fmt(budget) : '') + '</span></div>' +
           '<div class="hbar-track"><div class="hbar-fill" style="width:' + pct + '%;background:' + color + '"></div>' + budgetMark + '</div>' +
           subHtml +
@@ -654,6 +726,7 @@
         (topPct > 35 ? 'Trimming this category even 10% would save roughly ' + fmt(top.amt*0.1) + ' next month.' : 'Spending looks fairly spread across categories.');
       chartCard.appendChild(insight);
     }
+    renderSelectSummary();
 
     // budgets editor
     var budgetCard = document.getElementById("budgetCard");
@@ -688,11 +761,31 @@
 
     // entries list
     var listCard = document.getElementById("entryList");
-    var filtered = list.filter(function(e){ return state.entryFilter==="all" || e.type===state.entryFilter; });
+    var catFilterOn = state.categoryFilter.length > 0;
+    var subFilterOn = state.subcategoryFilter.length > 0;
+    var filtered = list.filter(function(e){
+      if(state.entryFilter!=="all" && e.type!==state.entryFilter) return false;
+      if(catFilterOn && state.categoryFilter.indexOf(e.category)===-1) return false;
+      if(subFilterOn && state.subcategoryFilter.indexOf(e.subcategory)===-1) return false;
+      return true;
+    });
+
+    var summaryEl = document.getElementById("filterSummary");
+    if(catFilterOn || subFilterOn){
+      var sumTotal = filtered.reduce(function(s,e){ return s + (e.type==="expense" ? e.amount : 0); }, 0);
+      var expCount = filtered.filter(function(e){ return e.type==="expense"; }).length;
+      summaryEl.className = "active";
+      summaryEl.innerHTML = '<span>Selected: <span class="fs-total">' + fmt(sumTotal) + '</span> across ' + expCount + ' expense' + (expCount===1?'':'s') + '</span>' +
+        '<button id="clearEntryFilters">Clear</button>';
+    } else {
+      summaryEl.className = "";
+      summaryEl.innerHTML = "";
+    }
+
     if(filtered.length===0){
       listCard.innerHTML = '<div class="empty-note">No entries here — tap + to add one.</div>';
     } else {
-      var sorted = filtered.slice().sort(function(a,b){ return b.date.localeCompare(a.date) || b.id-a.id; });
+      var sorted = filtered.slice().sort(function(a,b){ return b.date.localeCompare(a.date) || String(b.id).localeCompare(String(a.id)); });
       listCard.innerHTML = sorted.map(function(e){
         var markClass = e.type==="income" ? "income-mark" : ("imp-" + (e.importance || "high"));
         var d = new Date(e.date+"T00:00:00");
@@ -703,13 +796,15 @@
           var bLabel = new Date(e.budgetYear, e.budgetMonth, 1).toLocaleDateString(undefined,{month:"short"});
           shiftedNote = " · counted in " + bLabel;
         }
-        return '<div class="entry"><span class="mark ' + markClass + '"></span>' +
+        return '<div class="entry entry-clickable" data-id="' + e.id + '"><span class="mark ' + markClass + '"></span>' +
           '<div class="entry-main"><div class="entry-cat">' + catLabel + '</div>' +
           '<div class="entry-note">' + (e.note ? e.note + " · " : "") + '<span class="entry-date">' + dateStr + '</span>' + shiftedNote + '</div></div>' +
           '<span class="entry-amt ' + e.type + '">' + (e.type==="income"?"+":"-") + fmt(e.amount) + '</span>' +
           '<button class="entry-del" data-id="' + e.id + '">×</button></div>';
       }).join('');
     }
+
+    renderEntryCatFilterGrid();
   }
 
   function drawTrend(months){
@@ -768,11 +863,53 @@
 
   document.getElementById("chartCard").addEventListener("click", function(ev){
     var btn = ev.target.closest(".hbar-toggle");
-    if(!btn) return;
-    var cat = btn.getAttribute("data-cat");
-    expandedCategories[cat] = !expandedCategories[cat];
+    if(btn){
+      var cat = btn.getAttribute("data-cat");
+      expandedCategories[cat] = !expandedCategories[cat];
+      render();
+      return;
+    }
+    var navBtn = ev.target.closest(".hbar-navlabel");
+    if(navBtn){
+      var key = navBtn.getAttribute("data-navkey");
+      var topCat = key.split("::")[0];
+      expandedCategories[topCat] = !expandedCategories[topCat];
+      render();
+    }
+  });
+  document.getElementById("chartCard").addEventListener("change", function(ev){
+    var cb = ev.target.closest(".hbar-checkbox");
+    if(!cb) return;
+    var key = cb.getAttribute("data-key");
+    if(cb.checked) selectedKeys.add(key); else selectedKeys.delete(key);
+    renderSelectSummary();
+  });
+  document.getElementById("toggleSelectMode").addEventListener("click", function(){
+    selectMode = !selectMode;
+    this.textContent = selectMode ? "Done" : "Select";
+    if(!selectMode) selectedKeys.clear();
     render();
   });
+  function renderSelectSummary(){
+    var box = document.getElementById("selectSummary");
+    if(!selectMode){ box.style.display = "none"; return; }
+    box.style.display = "block";
+    if(selectedKeys.size === 0){
+      box.innerHTML = "Check any mix of categories or subcategories below to see their combined total.";
+      return;
+    }
+    var list = entriesForMonth(state.viewYear, state.viewMonth).filter(function(e){ return e.type==="expense"; });
+    var total = 0;
+    list.forEach(function(e){ if(isEntryCovered(e, selectedKeys)) total += e.amount; });
+    var labels = Array.from(selectedKeys).map(keyLabel).join(", ");
+    box.innerHTML = '<div class="ss-total">' + fmt(total) + '</div>' +
+      '<div style="margin-top:4px;">' + labels + '</div>' +
+      '<button class="ss-clear" id="ssClearBtn">Clear selection</button>';
+    document.getElementById("ssClearBtn").addEventListener("click", function(){
+      selectedKeys.clear();
+      render();
+    });
+  }
 
   document.getElementById("entryFilter").addEventListener("click", function(ev){
     var btn = ev.target.closest("button[data-f]");
@@ -781,6 +918,51 @@
     Array.prototype.forEach.call(document.querySelectorAll("#entryFilter button"), function(b){ b.classList.toggle("active", b===btn); });
     render();
   });
+
+  function renderEntryCatFilterGrid(){
+    var catGrid = document.getElementById("entryCatFilterGrid");
+    var subGrid = document.getElementById("entrySubFilterGrid");
+    if(!catGrid) return;
+    catGrid.innerHTML = state.categories.map(function(c){
+      return '<div class="cat-chip ' + (state.categoryFilter.indexOf(c)!==-1?"selected":"") + '" data-fcat="' + c + '">' + c + '</div>';
+    }).join("");
+    // subcategory options limited to the currently-selected categories, so
+    // this stays small and relevant instead of listing everything at once
+    var subOptions = [];
+    state.categoryFilter.forEach(function(c){
+      (state.subcategories[c] || []).forEach(function(s){ if(subOptions.indexOf(s)===-1) subOptions.push(s); });
+    });
+    subGrid.innerHTML = subOptions.map(function(s){
+      return '<div class="cat-chip ' + (state.subcategoryFilter.indexOf(s)!==-1?"selected":"") + '" data-fsub="' + s + '">' + s + '</div>';
+    }).join("");
+  }
+  document.getElementById("entryCatFilterGrid").addEventListener("click", function(ev){
+    var chip = ev.target.closest(".cat-chip[data-fcat]");
+    if(!chip) return;
+    var cat = chip.getAttribute("data-fcat");
+    var idx = state.categoryFilter.indexOf(cat);
+    if(idx===-1) state.categoryFilter.push(cat); else state.categoryFilter.splice(idx,1);
+    // dropping a category also drops any subcategory filters that no longer apply
+    var stillValid = {};
+    state.categoryFilter.forEach(function(c){ (state.subcategories[c]||[]).forEach(function(s){ stillValid[s]=true; }); });
+    state.subcategoryFilter = state.subcategoryFilter.filter(function(s){ return stillValid[s]; });
+    render();
+  });
+  document.getElementById("entrySubFilterGrid").addEventListener("click", function(ev){
+    var chip = ev.target.closest(".cat-chip[data-fsub]");
+    if(!chip) return;
+    var sub = chip.getAttribute("data-fsub");
+    var idx = state.subcategoryFilter.indexOf(sub);
+    if(idx===-1) state.subcategoryFilter.push(sub); else state.subcategoryFilter.splice(idx,1);
+    render();
+  });
+  document.getElementById("filterSummary").addEventListener("click", function(ev){
+    if(ev.target.id !== "clearEntryFilters") return;
+    state.categoryFilter = [];
+    state.subcategoryFilter = [];
+    render();
+  });
+  setupToggle("toggleEntryCatFilter", "entryCatFilterPanel", "Hide ▴", "Filter ▾");
 
   document.getElementById("budgetCard").addEventListener("change", function(ev){
     var input = ev.target.closest("input[data-cat]");
@@ -797,6 +979,9 @@
   }
   function openSheet(){
     state.previousTab = state.activeTab === "add" ? (state.previousTab || "overview") : state.activeTab;
+    state.editingEntryId = null;
+    document.getElementById("addPanelTitle").textContent = "New entry";
+    document.getElementById("saveEntry").textContent = "Save entry";
     var today = new Date();
     var day = Math.min(today.getDate(), daysInMonth(state.viewYear, state.viewMonth));
     document.getElementById("fDate").value = toDateStr(state.viewYear, state.viewMonth, day);
@@ -804,6 +989,7 @@
     state.formBudgetYear = state.viewYear;
     renderBudgetMonthLabel();
     setType("expense");
+    state.formCat = null;
     state.formSubcat = null;
     renderCatGrid();
     renderSubcatGrid();
@@ -812,7 +998,26 @@
     document.getElementById("fNote").value = "";
     setTab("add");
   }
-  function closeSheet(){ setTab(state.previousTab || "overview"); }
+  function openSheetForEdit(entry){
+    state.previousTab = state.activeTab === "add" ? (state.previousTab || "overview") : state.activeTab;
+    state.editingEntryId = entry.id;
+    document.getElementById("addPanelTitle").textContent = "Edit entry";
+    document.getElementById("saveEntry").textContent = "Update entry";
+    document.getElementById("fDate").value = entry.date;
+    state.formBudgetMonth = entry.budgetMonth;
+    state.formBudgetYear = entry.budgetYear;
+    renderBudgetMonthLabel();
+    setType(entry.type);
+    state.formCat = entry.type==="expense" ? entry.category : null;
+    state.formSubcat = entry.subcategory || null;
+    renderCatGrid();
+    renderSubcatGrid();
+    setImportance(entry.importance || "high");
+    document.getElementById("fAmount").value = entry.amount;
+    document.getElementById("fNote").value = entry.note || "";
+    setTab("add");
+  }
+  function closeSheet(){ state.editingEntryId = null; setTab(state.previousTab || "overview"); }
   document.getElementById("openAdd").addEventListener("click", openSheet);
   document.getElementById("cancelSheet").addEventListener("click", closeSheet);
 
@@ -954,14 +1159,20 @@
     if(!amount || amount<=0){ alert("Enter a valid amount."); return; }
     if(!date){ alert("Pick a date."); return; }
     if(!entriesRef){ alert("Not connected yet — check your household code."); return; }
-    entriesRef.add({
+    var payload = {
       type: state.formType, amount: amount,
       category: state.formType==="income" ? "Income" : (state.formCat || "Other"),
       subcategory: state.formType==="expense" ? state.formSubcat : null,
       importance: state.formType==="expense" ? state.formImportance : null,
       note: note, date: date,
       budgetMonth: state.formBudgetMonth, budgetYear: state.formBudgetYear
-    }).catch(function(err){ showSyncError(err.message); });
+    };
+    if(state.editingEntryId){
+      entriesRef.doc(state.editingEntryId).update(payload).catch(function(err){ showSyncError(err.message); });
+      state.editingEntryId = null;
+    } else {
+      entriesRef.add(payload).catch(function(err){ showSyncError(err.message); });
+    }
     // The entries listener will pick this up (instantly, via Firestore's
     // local cache, even before the server confirms it) and re-render.
     state.viewMonth = state.formBudgetMonth;
@@ -976,11 +1187,19 @@
   });
 
   document.getElementById("entryList").addEventListener("click", function(ev){
-    var btn = ev.target.closest(".entry-del");
-    if(!btn) return;
-    var id = btn.getAttribute("data-id");
-    if(confirm("Delete this entry?")){
-      if(entriesRef) entriesRef.doc(id).delete().catch(function(err){ showSyncError(err.message); });
+    var delBtn = ev.target.closest(".entry-del");
+    if(delBtn){
+      var id = delBtn.getAttribute("data-id");
+      if(confirm("Delete this entry?")){
+        if(entriesRef) entriesRef.doc(id).delete().catch(function(err){ showSyncError(err.message); });
+      }
+      return;
+    }
+    var row = ev.target.closest(".entry");
+    if(row){
+      var entryId = row.getAttribute("data-id");
+      var entry = state.entries.find(function(e){ return String(e.id)===String(entryId); });
+      if(entry) openSheetForEdit(entry);
     }
   });
 
