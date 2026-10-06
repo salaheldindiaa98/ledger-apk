@@ -156,7 +156,7 @@ button,input,select{font:inherit}button{cursor:pointer;color:inherit}#appShell{h
 "use strict";
 var isNative=!!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());
 if(isNative&&window.Capacitor.Plugins&&window.Capacitor.Plugins.StatusBar){try{window.Capacitor.Plugins.StatusBar.setOverlaysWebView({overlay:false});}catch(e){}}
-var FIREBASE_CONFIG={apiKey:"YOUR_API_KEY",authDomain:"YOUR_PROJECT.firebaseapp.com",projectId:"YOUR_PROJECT",storageBucket:"YOUR_PROJECT.appspot.com",messagingSenderId:"YOUR_SENDER_ID",appId:"YOUR_APP_ID"};
+var FIREBASE_CONFIG={apiKey:"AIzaSyDux7DykvcrTHyiDSuAG-IxpX8mkXxJPKU",authDomain:"ledger-household.firebaseapp.com",projectId:"ledger-household",storageBucket:"ledger-household.firebasestorage.app",messagingSenderId:"305458683077",appId:"1:305458683077:web:d532ba2015ac37c89f64ac"};
 var CAT_KEY="ledger_categories_v1",BUDGET_KEY="ledger_budgets_v1",SUBCAT_KEY="ledger_subcategories_v1",CROSS_KEY="ledger_crossing_categories_v1",HOUSEHOLD_KEY="ledger_household_code_v1";
 var DEFAULT_CATS=["Food","Transport","Bills","Health","Shopping","Entertainment","Education","Family","Savings","Other"];
 function storageGet(k,f){try{var v=localStorage.getItem(k);return v===null?f:v}catch(e){return f}}function storageSet(k,v){try{localStorage.setItem(k,v);return localStorage.getItem(k)===v}catch(e){return false}}
