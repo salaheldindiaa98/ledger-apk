@@ -13,6 +13,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '22' }
       - run: npm install
+      - name: Use the main index.html in the app
+        run: cp index.html www/index.html
       - run: npx cap sync android
       - run: chmod +x android/gradlew
       - run: cd android && ./gradlew assembleDebug
